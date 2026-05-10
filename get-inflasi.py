@@ -91,37 +91,35 @@ def col_idx(col):
 
 def download_as_xlsx(spreadsheet_id, api_key):
     """
-    Download file sebagai xlsx via Drive API v3.
-    Bekerja untuk file Office (.xlsx) maupun Google Sheets native.
-    Untuk file Office: gunakan /files/{id}?alt=media (download langsung)
-    Untuk Google Sheets: gunakan /files/{id}/export?mimeType=xlsx
+    Mengunduh spreadsheet menggunakan endpoint Export langsung.
+    Metode ini lebih kompatibel dengan API Key untuk file 'Anyone with the link'.
     """
-    headers = {}
+    # Gunakan endpoint export khusus Google Sheets
+    # Ini menghindari pemanggilan drive.files.get yang menyebabkan 403
+    dl_url = (
+        f"https://docs.google.com/spreadsheets/d/{spreadsheet_id}/export?"
+        f"format=xlsx&key={api_key}"
+    )
 
-    # Cek tipe file dulu
-    meta_url = f"https://www.googleapis.com/drive/v3/files/{spreadsheet_id}?fields=mimeType,name&key={api_key}"
-    r = requests.get(meta_url, timeout=20)
-    if r.status_code != 200:
-        err = r.json().get("error", {})
-        raise Exception(f"Drive API error ({r.status_code}): {err.get('message', r.text[:200])}")
+    try:
+        r = requests.get(dl_url, timeout=60)
+        
+        # Jika masih 403, berarti file memang di-set 'Restricted' oleh pemiliknya
+        if r.status_code == 403:
+            raise Exception(
+                "Akses Ditolak (403). Pastikan pemilik file telah mengatur akses ke: "
+                "'Anyone with the link' (Siapa saja yang memiliki link) sebagai Viewer."
+            )
+        
+        if r.status_code != 200:
+            raise Exception(f"Download error ({r.status_code}): {r.text[:200]}")
 
-    meta = r.json()
-    mime = meta.get("mimeType", "")
-    name = meta.get("name", "")
+        # Karena kita tidak bisa ambil nama file via API Key pada endpoint ini, 
+        # kita beri nama default saja
+        return io.BytesIO(r.content), "Spreadsheet_Data", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 
-    if mime == "application/vnd.google-apps.spreadsheet":
-        # Google Sheets native → export
-        dl_url = f"https://www.googleapis.com/drive/v3/files/{spreadsheet_id}/export?mimeType=application%2Fvnd.openxmlformats-officedocument.spreadsheetml.sheet&key={api_key}"
-    else:
-        # Office file (.xlsx, .xls, dll) → download langsung
-        dl_url = f"https://www.googleapis.com/drive/v3/files/{spreadsheet_id}?alt=media&key={api_key}"
-
-    r2 = requests.get(dl_url, timeout=60)
-    if r2.status_code != 200:
-        err = r2.json().get("error", {}) if r2.headers.get("content-type","").startswith("application/json") else {}
-        raise Exception(f"Download error ({r2.status_code}): {err.get('message', r2.text[:200])}")
-
-    return io.BytesIO(r2.content), name, mime
+    except requests.exceptions.RequestException as e:
+        raise Exception(f"Koneksi gagal: {str(e)}")
 
 
 def read_sheets_from_xlsx(xlsx_bytes, sheet_indices):
@@ -151,6 +149,7 @@ def read_sheets_from_xlsx(xlsx_bytes, sheet_indices):
 def fetch_via_api_key(spreadsheet_id, api_key):
     """Download seluruh file, kemudian baca 5 sheet pertama."""
     xlsx_bytes, name, mime = download_as_xlsx(spreadsheet_id, api_key)
+    # Gunakan library openpyxl yang sudah Anda import untuk baca bytes
     sheet_data = read_sheets_from_xlsx(xlsx_bytes, list(range(5)))
     return sheet_data, name, mime
 
