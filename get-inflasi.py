@@ -16,7 +16,6 @@ import gspread
 from google.oauth2 import service_account
 import io, re, json, requests
 
-# ── Page config ──────────────────────────────────────────────────────────────
 st.set_page_config(page_title="Generator Data Inflasi", page_icon="📊", layout="centered")
 
 st.markdown("""
@@ -63,7 +62,7 @@ label{color:#94a3b8 !important;font-size:.82rem !important;font-weight:500 !impo
 """, unsafe_allow_html=True)
 
 # ── Constants ─────────────────────────────────────────────────────────────────
-SPREADSHEET_ID = "15HbcEJwdK9TUo8Wpkgqnfveyp67RLK4B"
+SPREADSHEET_ID  = "15HbcEJwdK9TUo8Wpkgqnfveyp67RLK4B"
 SPREADSHEET_URL = f"https://docs.google.com/spreadsheets/d/{SPREADSHEET_ID}/edit"
 
 KODE_WILAYAH = {0:"1800", 1:"1804", 2:"1811", 3:"1871", 4:"1872"}
@@ -90,47 +89,74 @@ def col_idx(col):
 
 # ── Fetch helpers ─────────────────────────────────────────────────────────────
 
-def fetch_via_api_key(spreadsheet_id, api_key, sheet_index):
+def download_as_xlsx(spreadsheet_id, api_key):
     """
-    Sheets API v4 dengan API Key — bekerja untuk spreadsheet publik
-    (tidak perlu login, cukup set 'Anyone with the link can view').
+    Download file sebagai xlsx via Drive API v3.
+    Bekerja untuk file Office (.xlsx) maupun Google Sheets native.
+    Untuk file Office: gunakan /files/{id}?alt=media (download langsung)
+    Untuk Google Sheets: gunakan /files/{id}/export?mimeType=xlsx
     """
-    # 1. Dapatkan nama sheet
-    meta_url = (
-        f"https://sheets.googleapis.com/v4/spreadsheets/{spreadsheet_id}"
-        f"?fields=sheets.properties&key={api_key}"
-    )
+    headers = {}
+
+    # Cek tipe file dulu
+    meta_url = f"https://www.googleapis.com/drive/v3/files/{spreadsheet_id}?fields=mimeType,name&key={api_key}"
     r = requests.get(meta_url, timeout=20)
     if r.status_code != 200:
-        raise Exception(f"API Key error ({r.status_code}): {r.json().get('error',{}).get('message','')}")
+        err = r.json().get("error", {})
+        raise Exception(f"Drive API error ({r.status_code}): {err.get('message', r.text[:200])}")
 
-    sheets = r.json().get("sheets", [])
-    if sheet_index >= len(sheets):
-        raise Exception(f"Sheet ke-{sheet_index+1} tidak ada (total: {len(sheets)})")
+    meta = r.json()
+    mime = meta.get("mimeType", "")
+    name = meta.get("name", "")
 
-    sheet_name = sheets[sheet_index]["properties"]["title"]
+    if mime == "application/vnd.google-apps.spreadsheet":
+        # Google Sheets native → export
+        dl_url = f"https://www.googleapis.com/drive/v3/files/{spreadsheet_id}/export?mimeType=application%2Fvnd.openxmlformats-officedocument.spreadsheetml.sheet&key={api_key}"
+    else:
+        # Office file (.xlsx, .xls, dll) → download langsung
+        dl_url = f"https://www.googleapis.com/drive/v3/files/{spreadsheet_id}?alt=media&key={api_key}"
 
-    # 2. Ambil nilai
-    values_url = (
-        f"https://sheets.googleapis.com/v4/spreadsheets/{spreadsheet_id}"
-        f"/values/{requests.utils.quote(sheet_name)}?key={api_key}"
-    )
-    r2 = requests.get(values_url, timeout=30)
+    r2 = requests.get(dl_url, timeout=60)
     if r2.status_code != 200:
-        raise Exception(f"Gagal ambil data ({r2.status_code}): {r2.json().get('error',{}).get('message','')}")
+        err = r2.json().get("error", {}) if r2.headers.get("content-type","").startswith("application/json") else {}
+        raise Exception(f"Download error ({r2.status_code}): {err.get('message', r2.text[:200])}")
 
-    rows = r2.json().get("values", [])
-    if not rows:
-        return pd.DataFrame(), sheet_name
-
-    # Normalise: tiap baris panjangnya sama
-    max_col = max(len(row) for row in rows)
-    rows_padded = [row + [""] * (max_col - len(row)) for row in rows]
-    return pd.DataFrame(rows_padded, dtype=str).fillna(""), sheet_name
+    return io.BytesIO(r2.content), name, mime
 
 
-def fetch_via_service_account(credentials_json, sheet_index):
-    """Service Account — untuk spreadsheet privat."""
+def read_sheets_from_xlsx(xlsx_bytes, sheet_indices):
+    """Baca sheet dari bytes xlsx menggunakan openpyxl."""
+    import openpyxl
+    wb = openpyxl.load_workbook(xlsx_bytes, read_only=True, data_only=True)
+    sheet_names = wb.sheetnames
+    results = {}
+    for i in sheet_indices:
+        if i >= len(sheet_names):
+            results[i] = (None, f"Sheet ke-{i+1} tidak ada")
+            continue
+        ws = wb[sheet_names[i]]
+        rows = []
+        for row in ws.iter_rows(values_only=True):
+            rows.append([("" if v is None else str(v)) for v in row])
+        if not rows:
+            results[i] = (pd.DataFrame(), sheet_names[i])
+            continue
+        max_col = max(len(r) for r in rows)
+        rows = [r + [""]*(max_col-len(r)) for r in rows]
+        results[i] = (pd.DataFrame(rows, dtype=str).fillna(""), sheet_names[i])
+    wb.close()
+    return results
+
+
+def fetch_via_api_key(spreadsheet_id, api_key):
+    """Download seluruh file, kemudian baca 5 sheet pertama."""
+    xlsx_bytes, name, mime = download_as_xlsx(spreadsheet_id, api_key)
+    sheet_data = read_sheets_from_xlsx(xlsx_bytes, list(range(5)))
+    return sheet_data, name, mime
+
+
+def fetch_via_service_account(credentials_json):
+    """Baca via gspread — untuk Google Sheets native + Service Account."""
     scope = [
         "https://spreadsheets.google.com/feeds",
         "https://www.googleapis.com/auth/spreadsheets",
@@ -142,16 +168,20 @@ def fetch_via_service_account(credentials_json, sheet_index):
     client = gspread.authorize(creds)
     ss = client.open_by_url(SPREADSHEET_URL)
     worksheets = ss.worksheets()
-    if sheet_index >= len(worksheets):
-        raise Exception(f"Sheet ke-{sheet_index+1} tidak ditemukan (total: {len(worksheets)})")
-    ws = worksheets[sheet_index]
-    raw = ws.get_all_values()
-    if not raw:
-        return pd.DataFrame(), ws.title
-    max_col = max(len(r) for r in raw)
-    rows_padded = [r + [""] * (max_col - len(r)) for r in raw]
-    return pd.DataFrame(rows_padded, dtype=str).fillna(""), ws.title
-
+    result = {}
+    for i in range(5):
+        if i >= len(worksheets):
+            result[i] = (None, f"Sheet ke-{i+1} tidak ada")
+            continue
+        ws = worksheets[i]
+        raw = ws.get_all_values()
+        if not raw:
+            result[i] = (pd.DataFrame(), ws.title)
+            continue
+        max_col = max(len(r) for r in raw)
+        rows = [r + [""]*(max_col-len(r)) for r in raw]
+        result[i] = (pd.DataFrame(rows, dtype=str).fillna(""), ws.title)
+    return result
 
 # ── UI ────────────────────────────────────────────────────────────────────────
 st.markdown("""
@@ -168,9 +198,8 @@ with st.sidebar:
 
     auth_mode = st.radio(
         "Mode Autentikasi",
-        ["🔑 API Key (Publik)", "🔐 Service Account (Privat)"],
+        ["🔑 API Key", "🔐 Service Account"],
         index=0,
-        help="Pilih sesuai jenis spreadsheet Anda"
     )
 
     api_key = ""
@@ -179,29 +208,24 @@ with st.sidebar:
     if "API Key" in auth_mode:
         st.markdown("""
         <div class="info-box">
-        <b>Cara mendapatkan API Key:</b><br>
-        1. Buka <a href="https://console.cloud.google.com" target="_blank" style="color:#93c5fd">console.cloud.google.com</a><br>
-        2. APIs & Services → Credentials<br>
-        3. Create Credentials → API Key<br>
-        4. Enable <b>Google Sheets API</b>
+        <b>Syarat API Key:</b><br>
+        • Google Cloud project sudah ada<br>
+        • <b>Google Sheets API</b> + <b>Google Drive API</b> di-enable<br>
+        • Spreadsheet: <i>Anyone with the link → Viewer</i>
         </div>
         """, unsafe_allow_html=True)
-        api_key = st.text_input("Google Sheets API Key", type="password",
-                                placeholder="AIzaSy...")
+        api_key = st.text_input("API Key", type="password", placeholder="AIzaSy...")
         if not api_key:
             st.warning("Masukkan API Key untuk melanjutkan")
     else:
-        st.markdown("""
-        <div class="info-box">
-        Paste JSON dari Google Cloud Service Account yang sudah diberi akses ke spreadsheet.
-        </div>
-        """, unsafe_allow_html=True)
-        credentials_json = st.text_area("Service Account JSON",
-                                        placeholder='{"type":"service_account",...}',
-                                        height=160)
+        credentials_json = st.text_area(
+            "Service Account JSON",
+            placeholder='{"type":"service_account",...}',
+            height=160,
+        )
 
     st.markdown("---")
-    st.markdown("**📌 Kode Wilayah**")
+    st.markdown("**📌 Kode Wilayah per Sheet**")
     for i in range(5):
         st.markdown(f"""
         <div style="display:flex;justify-content:space-between;padding:4px 0;
@@ -256,35 +280,43 @@ st.markdown(f"""
 # ── Generate ──────────────────────────────────────────────────────────────────
 st.markdown("<br>", unsafe_allow_html=True)
 if st.button("⚡ Generate Excel", use_container_width=True):
-    # Validasi
     if idx_awal > idx_akhir:
         st.error("Kolom awal harus ≤ kolom akhir!")
         st.stop()
 
     use_api_key = "API Key" in auth_mode
     if use_api_key and not api_key.strip():
-        st.error("Masukkan API Key di sidebar terlebih dahulu!")
+        st.error("Masukkan API Key di sidebar!")
         st.stop()
     if not use_api_key and not credentials_json.strip():
-        st.error("Masukkan Service Account JSON di sidebar terlebih dahulu!")
+        st.error("Masukkan Service Account JSON di sidebar!")
         st.stop()
 
-    progress = st.progress(0, text="Memulai...")
+    progress = st.progress(0, text="Mengunduh file dari Google Drive...")
     all_dfs, errors = [], []
 
-    for i in range(5):
-        progress.progress((i+1)/6, text=f"Membaca Sheet {i+1} — {NAMA_WILAYAH[i]}...")
-        try:
-            if use_api_key:
-                df_raw, sheet_title = fetch_via_api_key(SPREADSHEET_ID, api_key.strip(), i)
-            else:
-                df_raw, sheet_title = fetch_via_service_account(credentials_json, i)
+    try:
+        if use_api_key:
+            progress.progress(0.1, text="Mendeteksi tipe file...")
+            sheet_data, fname, fmime = fetch_via_api_key(SPREADSHEET_ID, api_key.strip())
+            st.markdown(f'<div class="info-box">📄 File: <b>{fname}</b> | Tipe: <code>{fmime}</code></div>', unsafe_allow_html=True)
+        else:
+            progress.progress(0.1, text="Autentikasi Service Account...")
+            sheet_data = fetch_via_service_account(credentials_json)
 
+        for i in range(5):
+            progress.progress(0.15 + (i+1)*0.15, text=f"Memproses Sheet {i+1} — {NAMA_WILAYAH[i]}...")
+
+            df_raw, sheet_title = sheet_data.get(i, (None, f"Sheet {i+1}"))
+
+            if df_raw is None:
+                errors.append(f"Sheet {i+1}: {sheet_title}")
+                continue
             if df_raw.empty:
                 errors.append(f"Sheet {i+1} ({sheet_title}) kosong, dilewati.")
                 continue
 
-            # Pastikan cukup kolom
+            # Perpanjang kolom jika kurang
             while df_raw.shape[1] <= idx_akhir:
                 df_raw[df_raw.shape[1]] = ""
 
@@ -303,13 +335,15 @@ if st.button("⚡ Generate Excel", use_container_width=True):
 
             all_dfs.append(result)
 
-        except Exception as e:
-            errors.append(f"Sheet {i+1}: {e}")
+    except Exception as e:
+        progress.empty()
+        st.markdown(f'<div class="error-box">❌ {e}</div>', unsafe_allow_html=True)
+        st.stop()
 
-    progress.progress(1.0, text="Menyimpan Excel...")
+    progress.progress(0.95, text="Menyimpan Excel...")
 
     for err in errors:
-        st.markdown(f'<div class="error-box">⚠️ {err}</div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="warn-box">⚠️ {err}</div>', unsafe_allow_html=True)
 
     if not all_dfs:
         progress.empty()
