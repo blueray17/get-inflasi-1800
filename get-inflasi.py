@@ -134,7 +134,8 @@ def read_sheets_from_xlsx(xlsx_bytes, sheet_indices):
             continue
         ws = wb[sheet_names[i]]
         rows = []
-        for row in ws.iter_rows(values_only=True):
+        for row in ws.iter_rows(min_row=4, values_only=True):
+#        for row in ws.iter_rows(values_only=True):
             rows.append([("" if v is None else str(v)) for v in row])
         if not rows:
             results[i] = (pd.DataFrame(), sheet_names[i])
