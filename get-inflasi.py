@@ -308,11 +308,11 @@ KODE_WILAYAH = {
 }
 
 NAMA_WILAYAH = {
-    0: "Provinsi Lampung",
-    1: "Lampung Barat",
-    2: "Lampung Selatan",
-    3: "Bandar Lampung",
-    4: "Metro",
+    0: "Prov Lampung",
+    1: "Kab Lampung Timur",
+    2: "Kab Mesuji",
+    3: "Kota Bandar Lampung",
+    4: "Kota Metro",
 }
 
 SPREADSHEET_URL = "https://docs.google.com/spreadsheets/d/15HbcEJwdK9TUo8Wpkgqnfveyp67RLK4B/edit"
