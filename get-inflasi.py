@@ -67,7 +67,7 @@ SPREADSHEET_ID = "15HbcEJwdK9TUo8Wpkgqnfveyp67RLK4B"
 SPREADSHEET_URL = f"https://docs.google.com/spreadsheets/d/{SPREADSHEET_ID}/edit"
 
 KODE_WILAYAH = {0:"1800", 1:"1804", 2:"1811", 3:"1871", 4:"1872"}
-NAMA_WILAYAH = {0:"Provinsi Lampung", 1:"Lampung Barat", 2:"Lampung Selatan", 3:"Bandar Lampung", 4:"Metro"}
+NAMA_WILAYAH = {0:"Provinsi Lampung", 1:"Lampung Timur", 2:"Mesuji", 3:"Bandar Lampung", 4:"Metro"}
 
 BULAN = [("01","Januari"),("02","Februari"),("03","Maret"),("04","April"),
          ("05","Mei"),("06","Juni"),("07","Juli"),("08","Agustus"),
