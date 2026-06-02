@@ -265,7 +265,7 @@ if st.button("⚡ Generate Excel", use_container_width=True):
         st.error("Kolom awal harus ≤ kolom akhir!")
         st.stop()
 
-    use_api_key = "API Key" in auth_mode
+    use_api_key = "API Key" 
     if use_api_key and not api_key.strip():
         st.error("Masukkan API Key di sidebar!")
         st.stop()
