@@ -195,16 +195,7 @@ st.markdown("""
 with st.sidebar:
     st.markdown("### ⚙️ Konfigurasi Akses")
     st.markdown("---")
-
-
-    st.markdown("""
-    <div class="info-box">
-    <b>Syarat API Key:</b><br>
-    • Google Cloud project sudah ada<br>
-    • <b>Google Sheets API</b> + <b>Google Drive API</b> di-enable<br>
-    • Spreadsheet: <i>Anyone with the link → Viewer</i>
-    </div>
-    """, unsafe_allow_html=True)
+    st.markdown("**📌 Setting API Key **")
     api_key = st.text_input("API Key", type="password", placeholder="AIzaSy...")
     if not api_key:
         st.warning("Masukkan API Key untuk melanjutkan")
