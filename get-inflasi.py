@@ -196,40 +196,26 @@ with st.sidebar:
     st.markdown("### ⚙️ Konfigurasi Akses")
     st.markdown("---")
 
-    auth_mode = st.radio(
-        "Mode Autentikasi",
-        ["🔑 API Key", "🔐 Service Account"],
-        index=0,
-    )
 
-    api_key = ""
-    credentials_json = ""
+    st.markdown("""
+    <div class="info-box">
+    <b>Syarat API Key:</b><br>
+    • Google Cloud project sudah ada<br>
+    • <b>Google Sheets API</b> + <b>Google Drive API</b> di-enable<br>
+    • Spreadsheet: <i>Anyone with the link → Viewer</i>
+    </div>
+    """, unsafe_allow_html=True)
+    api_key = st.text_input("API Key", type="password", placeholder="AIzaSy...")
+    if not api_key:
+        st.warning("Masukkan API Key untuk melanjutkan")
 
-    if "API Key" in auth_mode:
-        st.markdown("""
-        <div class="info-box">
-        <b>Syarat API Key:</b><br>
-        • Google Cloud project sudah ada<br>
-        • <b>Google Sheets API</b> + <b>Google Drive API</b> di-enable<br>
-        • Spreadsheet: <i>Anyone with the link → Viewer</i>
-        </div>
-        """, unsafe_allow_html=True)
-        api_key = st.text_input("API Key", type="password", placeholder="AIzaSy...")
-        if not api_key:
-            st.warning("Masukkan API Key untuk melanjutkan")
-    else:
-        credentials_json = st.text_area(
-            "Service Account JSON",
-            placeholder='{"type":"service_account",...}',
-            height=160,
-        )
     
     st.markdown("---")
     st.markdown("**📌 Link Spreadsheet data inflasi**")
     st.markdown(f"""
     <div style="display:flex;justify-content:space-between;padding:4px 0;
     border-bottom:1px solid rgba(99,102,241,.1);font-size:.78rem;">
-    <a href"https://docs.google.com/spreadsheets/d/15HbcEJwdK9TUo8Wpkgqnfveyp67RLK4B/edit?gid=1047534752#gid=1047534752"><span style="color:#6366f1;font-family:monospace;font-weight:600">Data Inflasi</span></a>
+    st.page_link("https://docs.google.com/spreadsheets/d/15HbcEJwdK9TUo8Wpkgqnfveyp67RLK4B/edit?gid=1047534752#gid=1047534752", label="Data Inflasi", icon="📊")
     </div>""", unsafe_allow_html=True)
 
 
