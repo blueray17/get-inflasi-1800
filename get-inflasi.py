@@ -331,6 +331,10 @@ if st.button("⚡ Generate Excel", use_container_width=True):
         st.error("Tidak ada data berhasil diambil.")
     else:
         final_df = pd.concat(all_dfs, ignore_index=True)
+        numeric_cols = ["ihk", "inflasi_mtm", "inflasi_ytd", "inflasi_yoy", "andil_mtm", "andil_ytd", "andil_yoy"]
+        for col in numeric_cols:
+            if col in final_df.columns:
+                final_df[col] = pd.to_numeric(final_df[col], errors="coerce")
 
         buf = io.BytesIO()
         with pd.ExcelWriter(buf, engine="openpyxl") as writer:
