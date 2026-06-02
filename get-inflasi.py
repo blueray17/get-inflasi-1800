@@ -204,10 +204,7 @@ with st.sidebar:
     st.markdown("---")
     st.markdown("**📌 Link Spreadsheet data inflasi**")
     st.markdown(f"""
-    <div style="display:flex;justify-content:space-between;padding:4px 0;
-    border-bottom:1px solid rgba(99,102,241,.1);font-size:.78rem;">
     st.page_link("https://docs.google.com/spreadsheets/d/15HbcEJwdK9TUo8Wpkgqnfveyp67RLK4B/edit?gid=1047534752#gid=1047534752", label="Data Inflasi", icon="📊")
-    </div>""", unsafe_allow_html=True)
 
 
     st.markdown("---")
