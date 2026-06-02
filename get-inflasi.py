@@ -192,20 +192,18 @@ st.markdown("""
 </div>""", unsafe_allow_html=True)
 
 # ── Sidebar ───────────────────────────────────────────────────────────────────
+        
 with st.sidebar:
     st.markdown("### ⚙️ Konfigurasi Akses")
     st.markdown("---")
-    st.markdown("**📌 Setting API Key **")
+    st.markdown("**📌 Setting API Key**")
     api_key = st.text_input("API Key", type="password", placeholder="AIzaSy...")
     if not api_key:
         st.warning("Masukkan API Key untuk melanjutkan")
 
-    
     st.markdown("---")
     st.markdown("**📌 Link Spreadsheet data inflasi**")
-    st.markdown(f"""
-    st.page_link("https://docs.google.com/spreadsheets/d/15HbcEJwdK9TUo8Wpkgqnfveyp67RLK4B/edit?gid=1047534752#gid=1047534752", label="Data Inflasi", icon="📊")
-
+    st.markdown("[Data Inflasi 📊](https://docs.google.com/spreadsheets/d/15HbcEJwdK9TUo8Wpkgqnfveyp67RLK4B/edit)")
 
     st.markdown("---")
     st.markdown("**📌 Kode Wilayah per Sheet**")
